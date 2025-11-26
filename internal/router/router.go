@@ -5,16 +5,17 @@ import (
 	"context"
 	"log"
 
+	"taskboard-backend/internal/config"
+	"taskboard-backend/internal/controllers"
+	"taskboard-backend/internal/dto"
+	ws "taskboard-backend/internal/websocket"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
-	"taskboard-backend/internal/config"
-	"taskboard-backend/internal/controllers"
-	"taskboard-backend/internal/dto"
-	ws "taskboard-backend/internal/websocket"
 )
 
 // Router holds all route handlers and dependencies.
@@ -68,11 +69,26 @@ func (r *Router) Setup() {
 	r.app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
+	// Parse CORS origins - support comma-separated list or single origin
+	corsOrigins := r.config.CORS.Origins
+	if corsOrigins == "" {
+		// If not set, default to allow all (for development only)
+		// In production, this should always be set explicitly
+		if r.config.Env == "development" {
+			corsOrigins = "*"
+		} else {
+			// In production, if not set, log warning but allow common origins
+			log.Printf("WARNING: CORS_ORIGINS not set in production!")
+			corsOrigins = "https://sync-layer.vercel.app"
+		}
+	}
+
 	r.app.Use(cors.New(cors.Config{
-		AllowOrigins:     r.config.CORS.Origins,
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowOrigins:     corsOrigins,
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-User-ID",
 		AllowCredentials: true,
+		ExposeHeaders:    "Content-Length",
 	}))
 
 	// Health check

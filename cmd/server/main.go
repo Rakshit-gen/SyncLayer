@@ -26,7 +26,8 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Printf("Starting TaskBoard server in %s mode...", cfg.Env)
+	log.Printf("Starting SyncLayer server in %s mode...", cfg.Env)
+	log.Printf("CORS Origins: %s", cfg.CORS.Origins)
 
 	// Initialize PostgreSQL
 	postgres, err := database.NewPostgresDB(cfg.Postgres)
