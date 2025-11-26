@@ -4,6 +4,7 @@ package router
 import (
 	"context"
 	"log"
+	"strings"
 
 	"taskboard-backend/internal/config"
 	"taskboard-backend/internal/controllers"
@@ -72,10 +73,10 @@ func (r *Router) Setup() {
 	// Parse CORS origins - support comma-separated list or single origin
 	corsOrigins := r.config.CORS.Origins
 	if corsOrigins == "" {
-		// If not set, default to allow all (for development only)
-		// In production, this should always be set explicitly
+		// If not set, default based on environment
 		if r.config.Env == "development" {
-			corsOrigins = "*"
+			// In development, allow common localhost origins
+			corsOrigins = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001"
 		} else {
 			// In production, if not set, log warning but allow common origins
 			log.Printf("WARNING: CORS_ORIGINS not set in production!")
@@ -83,12 +84,38 @@ func (r *Router) Setup() {
 		}
 	}
 
+	// Split comma-separated origins if multiple are provided
+	originList := strings.Split(corsOrigins, ",")
+	allowedOrigins := make(map[string]bool)
+	for _, origin := range originList {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			allowedOrigins[trimmed] = true
+		}
+	}
+
+	log.Printf("CORS allowed origins: %v", allowedOrigins)
+
+	// Use AllowOriginsFunc to properly handle multiple origins with credentials
 	r.app.Use(cors.New(cors.Config{
-		AllowOrigins:     corsOrigins,
+		AllowOriginsFunc: func(origin string) bool {
+			// Allow requests with no origin (like mobile apps or curl requests)
+			if origin == "" {
+				return true
+			}
+			// Check if origin is in allowed list
+			allowed, exists := allowedOrigins[origin]
+			if exists && allowed {
+				return true
+			}
+			log.Printf("CORS: Origin '%s' not allowed. Allowed origins: %v", origin, allowedOrigins)
+			return false
+		},
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-User-ID",
 		AllowCredentials: true,
 		ExposeHeaders:    "Content-Length",
+		MaxAge:           86400, // 24 hours
 	}))
 
 	// Health check
